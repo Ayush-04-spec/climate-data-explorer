@@ -1,0 +1,10 @@
+Django==4.2.16
+psycopg2-binary==2.9.10
+xarray==2024.7.0
+netCDF4==1.7.2
+h5netcdf==1.4.0
+cftime==1.6.4.post1
+pandas==2.2.3
+numpy==2.0.2
+dask==2024.8.0
+scipy==1.13.1

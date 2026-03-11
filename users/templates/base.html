@@ -1,0 +1,51 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <header>
+        <nav>
+            <ul>
+                {% if user.is_authenticated %}
+                <li><a href="{% url 'climate:home' %}">Home</a></li>
+                <li><a href="{% url 'users:profile' %}">Profile</li>
+                <li><a href="{% url 'users:logout' %}">Logout</a></li>
+
+                {% else %}
+                <li><a href="{% url 'users:login' %}">Login</a></li>
+                <li><a href="{% url 'users:register' %}">Register</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </header>
+    
+
+    <div class="homepage-container">
+        {% if user.is_authenticated %}
+        {% else %}
+        <section class="homepage">
+            <div class="homepage-text">
+            </div>
+            <div class="cta-button-container">
+
+                <a href="{% url 'users:register' %}" class="cta-button">Get Started</a>
+                <a href="{% url 'users:login' %}" class="cta-button">Log In</a>
+            </div>
+        </section>
+        {% endif %}
+    </div>
+
+
+    
+    {% block content %}
+    {% endblock %}
+
+
+    <footer>
+        <!-- Footer content -->
+    </footer>
+</body>
+</html>

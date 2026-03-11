@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block content %}
+
+<head>
+<meta charset="UTF-8">
+<title>Climate Data Explorer</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.12.1/plotly.min.js"></script>
+
+<style>
+#map{height:400px;}
+#plot{width:100%;height:400px;}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th,td{
+border:1px solid #ddd;
+padding:8px;
+}
+
+th{
+background:#f2f2f2;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Select Coordinates, Climate Variable, and Date Range</h2>
+
+<div id="map"></div>
+
+<br>
+
+Latitude <input id="lat" readonly>
+Longitude <input id="lon" readonly>
+
+<br><br>
+
+<label>Variable</label>
+
+<select id="variable">
+{% for variable in climate_variables %}
+<option value="{{variable}}">{{variable}}</option>
+{% endfor %}
+</select>
+
+<br><br>
+
+<h3>Date Range</h3>
+
+Start Year
+<select id="start_year"></select>
+
+Start Month
+<select id="start_month">
+<option value="01">Jan</option>
+<option value="02">Feb</option>
+<option value="03">Mar</option>
+<option value="04">Apr</option>
+<option value="05">May</option>
+<option value="06">Jun</option>
+<option value="07">Jul</option>
+<option value="08">Aug</option>
+<option value="09">Sep</option>
+<option value="10">Oct</option>
+<option value="11">Nov</option>
+<option value="12">Dec</option>
+</select>
+
+<br><br>
+
+End Year
+<select id="end_year"></select>
+
+End Month
+<select id="end_month">
+<option value="01">Jan</option>
+<option value="02">Feb</option>
+<option value="03">Mar</option>
+<option value="04">Apr</option>
+<option value="05">May</option>
+<option value="06">Jun</option>
+<option value="07">Jul</option>
+<option value="08">Aug</option>
+<option value="09">Sep</option>
+<option value="10">Oct</option>
+<option value="11">Nov</option>
+<option value="12">Dec</option>
+</select>
+
+<br><br>
+
+<button onclick="fetchData()">Plot Time Series</button>
+<button onclick="downloadCSV()">Download CSV</button>
+
+<div id="plot"></div>
+
+<h3>Selected Coordinates</h3>
+
+<table id="coordinates-table">
+<thead>
+<tr>
+<th>Latitude</th>
+<th>Longitude</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+
+<script>
+
+for(let y=1979;y<=2030;y++){
+
+let option1=document.createElement("option");
+option1.value=y;
+option1.text=y;
+start_year.appendChild(option1);
+
+let option2=document.createElement("option");
+option2.value=y;
+option2.text=y;
+end_year.appendChild(option2);
+
+}
+
+start_year.value=2025;
+end_year.value=2025;
+
+var map=L.map('map').setView([25,85],5);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+var points=[];
+var polygonLayer=L.layerGroup().addTo(map);
+var polygon;
+
+map.on('click',function(e){
+
+var lat=e.latlng.lat.toFixed(5);
+var lon=e.latlng.lng.toFixed(5);
+
+points.push({lat:lat,lon:lon});
+
+updateTable();
+
+if(points.length>=3){
+
+var latlngs=points.map(p=>[p.lat,p.lon]);
+
+if(polygon){polygon.setLatLngs(latlngs)}
+else{polygon=L.polygon(latlngs,{color:'blue'}).addTo(polygonLayer)}
+
+}
+
+document.getElementById("lat").value=lat;
+document.getElementById("lon").value=lon;
+
+});
+
+function updateTable(){
+
+var body=document.querySelector("#coordinates-table tbody");
+body.innerHTML="";
+
+points.forEach(p=>{
+
+var row=document.createElement("tr");
+
+var lat=document.createElement("td");
+lat.textContent=p.lat;
+
+var lon=document.createElement("td");
+lon.textContent=p.lon;
+
+row.appendChild(lat);
+row.appendChild(lon);
+
+body.appendChild(row);
+
+});
+
+}
+
+function fetchData(){
+
+if(points.length==0){
+alert("Select a point");
+return;
+}
+
+var variable=document.getElementById("variable").value;
+
+var startDate=start_year.value+"-"+start_month.value;
+var endDate=end_year.value+"-"+end_month.value;
+
+if(points.length==1){
+
+var p=points[0];
+
+fetch(`/get_timeseries?lat=${p.lat}&lon=${p.lon}&variable=${variable}&start_date=${startDate}&end_date=${endDate}`)
+.then(r=>r.json())
+.then(data=>{
+console.log(data);   // DEBUG
+plotGraph(data,variable);
+});
+
+}else{
+
+var coords=points.map(p=>`${p.lat},${p.lon}`).join(';');
+
+fetch(`/get_timeseries?coordinates=${coords}&variable=${variable}&start_date=${startDate}&end_date=${endDate}`)
+.then(r=>r.json())
+.then(data=>{
+console.log(data);
+plotGraph(data,variable);
+});
+
+}
+
+}
+
+function plotGraph(data,variable){
+
+if(data.error){
+alert(data.error);
+return;
+}
+
+/* ERA5 variable mapping */
+
+const variableMap={
+tas:"t2m",
+pr:"tp",
+vas:"v10"
+};
+
+const actualVar=variableMap[variable];
+
+var dates=data.map(d=>d.time);
+var values=data.map(d=>d[actualVar]);
+
+if(variable==="pr"){
+values=values.map(v=>v*1000);
+}
+
+Plotly.newPlot(
+'plot',
+[{x:dates,y:values,type:'scatter',mode:'lines+markers'}],
+{
+title:"Time Series "+variable,
+xaxis:{title:"Date"},
+yaxis:{title:variable}
+}
+);
+
+}
+
+function downloadCSV(){
+
+var variable=document.getElementById("variable").value;
+
+var startDate=start_year.value+"-"+start_month.value;
+var endDate=end_year.value+"-"+end_month.value;
+
+if(points.length==1){
+
+var p=points[0];
+
+window.location.href=
+`/download_csv?lat=${p.lat}&lon=${p.lon}&variable=${variable}&start_date=${startDate}&end_date=${endDate}`;
+
+}else{
+
+var coords=points.map(p=>`${p.lat},${p.lon}`).join(';');
+
+window.location.href=
+`/download_csv?coordinates=${coords}&variable=${variable}&start_date=${startDate}&end_date=${endDate}`;
+
+}
+
+}
+
+</script>
+
+</body>
+
+{% endblock %}
